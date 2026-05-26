@@ -1,8 +1,10 @@
 import React from 'react';
 import { AppStateProvider, useAppState } from './context/AppContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Header from './components/layout/Header';
 import StepWizard from './components/calculator/StepWizard';
 import AdminDashboard from './components/admin/AdminDashboard';
+import { LoginPage } from './pages/LoginPage';
 import { Calculator, ShieldCheck, Mail, Phone, ExternalLink } from 'lucide-react';
 
 function DashboardOrWizard() {
@@ -69,13 +71,42 @@ function DashboardOrWizard() {
   );
 }
 
-export default function App() {
+function AppContent() {
+  const { user, loading, canAccessDashboard } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F7FA]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent" />
+          <span className="text-gray-500 text-sm">جارٍ التحميل...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // إذا لم يكن مسجل الدخول وتم تكوين Supabase
+  const supabaseConfigured = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY;
+  
+  if (!user && supabaseConfigured) {
+    return <LoginPage />;
+  }
+
+  // إذا كان المستخدم عادياً أو لم يتم تكوين Supabase — أظهر التطبيق
   return (
-    <AppStateProvider>
+    <AppStateProvider showDashboard={canAccessDashboard || !supabaseConfigured}>
       <div className="min-h-screen flex flex-col justify-between">
         <Header />
         <DashboardOrWizard />
       </div>
     </AppStateProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
