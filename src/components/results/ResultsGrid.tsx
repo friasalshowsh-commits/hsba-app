@@ -245,8 +245,8 @@ export default function ResultsGrid({
                         )}
                         {offer.housingSupportAmount > 0 && (
                           <div className="col-span-2 bg-[#E6F4F4]/40 border border-[#0EA5A4]/20 rounded-xl p-3 flex justify-between items-center text-xs">
-                            <span className="text-[#0ea5a4] font-bold">الدعم السكني المستحق:</span>
-                            <span className="font-bold text-[#0EA5A4]">{(offer.housingSupportAmount).toLocaleString('ar-SA')} ريال</span>
+                            <span className="text-[#0ea5a4] font-bold">{offer.supportType === 'monthly' ? 'الدعم السكني الشهري:' : 'دعم الدفعة المباشرة:'}</span>
+                            <span className="font-bold text-[#0EA5A4]">{(offer.housingSupportAmount).toLocaleString('ar-SA')} ريال{offer.supportType === 'monthly' ? ' / شهر' : ''}</span>
                           </div>
                         )}
                       </>
@@ -394,9 +394,9 @@ export default function ResultsGrid({
                           <span className="font-bold text-[#111827]">{(selectedOffer.personalAmount).toLocaleString('ar-SA')} ريال</span>
                         </div>
                       )}
-                      <div>
-                        <span className="text-xs text-[#6B7280] block mb-1">الدعم المستحق</span>
-                        <span className="font-bold text-[#0EA5A4]">{(selectedOffer.housingSupportAmount).toLocaleString('ar-SA')} ريال</span>
+<div>
+                        <span className="text-xs text-[#6B7280] block mb-1">{selectedOffer?.supportType === 'monthly' ? 'الدعم الشهري' : 'دعم الدفعة'}</span>
+                        <span className="font-bold text-[#0EA5A4]">{(selectedOffer.housingSupportAmount).toLocaleString('ar-SA')} ريال{selectedOffer?.supportType === 'monthly' ? ' / شهر' : ''}</span>
                       </div>
                       <div>
                         <span className="text-xs text-[#6B7280] block mb-1">هامش الربح العقاري</span>

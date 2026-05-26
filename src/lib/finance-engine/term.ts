@@ -6,6 +6,7 @@ export function calculateFinanceTerm(params: {
   birthYear: number;
   birthMonth: number;
   retirementAge: number;
+  displayRetirementAge?: number;
   maxTermMonthsBank: number;
   maxAgeAtEndBank: number;
   monthsAfterRetirementBank: number;
@@ -18,6 +19,7 @@ export function calculateFinanceTerm(params: {
     birthYear,
     birthMonth,
     retirementAge,
+    displayRetirementAge,
     maxTermMonthsBank,
     maxAgeAtEndBank,
     monthsAfterRetirementBank,
@@ -78,7 +80,8 @@ export function calculateFinanceTerm(params: {
     if (remainingMonthsToMaxAge < maxTermMonthsBank && remainingMonthsToMaxAge <= ruleLimitTerm) {
       reductionReason = `تم تقليص مدة التمويل لتتجاوز العمر الأقصى للعميل عند نهاية التمويل البالغ ${maxAgeAtEndBank} سنة.`;
     } else if (ruleLimitTerm < maxTermMonthsBank) {
-      reductionReason = `تم تقليص مدة التمويل بسبب بلوغ سن التقاعد (${Math.round(retirementAge)} سنة) مع الحدود المسموح بها بعد التقاعد.`;
+      const displayAge = displayRetirementAge ?? Math.round(retirementAge);
+      reductionReason = `تم تقليص مدة التمويل بسبب بلوغ سن التقاعد (${displayAge} سنة) مع الحدود المسموح بها بعد التقاعد.`;
     }
   }
 
