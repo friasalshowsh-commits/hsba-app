@@ -123,7 +123,7 @@ export function calculateBanksFinancing(params: {
       const matchedRank = militaryRanks.find(r => r.id === rankId);
       if (matchedRank) retirementAge = matchedRank.retirementAge;
     }
-
+    const displayRetirementAge = retirementAge; // القيمة للعرض (قبل التحويل)
     if (ageCalcCalendar === 'hijri') {
       retirementAge = retirementAge * 0.9707;
     }
@@ -164,6 +164,7 @@ export function calculateBanksFinancing(params: {
       birthYear,
       birthMonth,
       retirementAge,
+      displayRetirementAge: Math.round(displayRetirementAge),
       maxTermMonthsBank: bank.maxTermMonths,
       maxAgeAtEndBank: bank.maxAgeAtEnd,
       monthsAfterRetirementBank: bank.monthsAfterRetirement,
@@ -348,7 +349,7 @@ export function calculateBanksFinancing(params: {
       personalCalculationMethod: isPersonalOnly ? personalCalcMethod : undefined,
       rejectionReason: !isEligible ? diag.messages[0] : undefined,
       netSalary: solvedNetSalary,
-      retirementAge: Math.round(retirementAge),
+      retirementAge: Math.round(displayRetirementAge),
       pensionSalary: pensionResult.pensionSalary,
       diagnosticMessages: [
         ...(supportType !== 'none' && supportResult.appliedRule ? [supportResult.appliedRule] : []),
