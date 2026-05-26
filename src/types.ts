@@ -283,6 +283,7 @@ export interface BankCalculationResult {
   realEstateAmount: number;
   personalAmount: number;
   housingSupportAmount: number;
+  supportType?: 'none' | 'monthly' | 'downpayment';
   totalPurchasingPower: number;
   monthlyInstallmentBeforeRetirement: number;
   monthlyInstallmentAfterRetirement: number;
