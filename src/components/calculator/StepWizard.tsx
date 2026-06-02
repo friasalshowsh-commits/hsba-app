@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAppState } from '../../context/AppContext';
 import { calculateBanksFinancing } from '../../lib/finance-engine';
 import { SectorId, ProductId, SupportType, TermMode, BankCalculationResult } from '../../types';
-import { 
+import {
   Home, User, Coins, Briefcase, Calendar, Scale,
-  ChevronLeft, ChevronRight, HelpCircle, AlertCircle, Info, Calculator
+  ChevronLeft, ChevronRight, HelpCircle, AlertCircle, Calculator
 } from 'lucide-react';
 import ResultsGrid from '../results/ResultsGrid';
 import NumericInput from './NumericInput';
@@ -23,14 +23,16 @@ export default function StepWizard() {
     setCalculationLogs
   } = useAppState();
 
-  // Wizard active step (1 to 7)
+  // Wizard active step (1 to 4: customer_data, salary, finance_options, results)
   const [currentStep, setCurrentStep] = useState(1);
   const [results, setResults] = useState<BankCalculationResult[] | null>(null);
 
   // --- Step Form Values State ---
   const [mainFinanceType, setMainFinanceType] = useState<'real_estate' | 'personal_only' | 'real_estate_with_existing_personal'>('real_estate');
   const [realEstateSubType, setRealEstateSubType] = useState<'real_estate_only' | 'real_estate_with_new_personal'>('real_estate_only');
-  const [customerStatus, setCustomerStatus] = useState<'active_employee' | 'retired'>('active_employee');
+
+  // Existing personal loan toggle (drives the "real estate with existing personal" path)
+  const [hasExistingPersonal, setHasExistingPersonal] = useState<boolean>(false);
 
   const [productId, setProductId] = useState<ProductId>('real_estate');
   const [sectorId, setSectorId] = useState<SectorId>('government_civilian');
@@ -62,6 +64,7 @@ export default function StepWizard() {
   const [manualTermYears, setManualTermYears] = useState<number>(25);
 
   const [existingPersonalLoanPayment, setExistingPersonalLoanPayment] = useState<number>(0);
+  const [existingPersonalRemainingMonths, setExistingPersonalRemainingMonths] = useState<number>(0);
   const [otherObligations, setOtherObligations] = useState<number>(0);
   const [obligations, setObligations] = useState<number>(0);
 
@@ -70,6 +73,15 @@ export default function StepWizard() {
 
   // Compute live local calculated Net salary to aid real-time UI display
   const [localCalculatedNet, setLocalCalculatedNet] = useState(12000);
+
+  // Sync main finance type with the existing-personal toggle
+  useEffect(() => {
+    if (hasExistingPersonal) {
+      setMainFinanceType('real_estate_with_existing_personal');
+    } else {
+      setMainFinanceType('real_estate');
+    }
+  }, [hasExistingPersonal]);
 
   // Sync Product ID with Main/Sub choices
   useEffect(() => {
@@ -113,52 +125,21 @@ export default function StepWizard() {
     }
   }, [salaryMode, directNetSalary, basicSalary, housingAllowance, otherAllowances, sectorId, salaryRules]);
 
-  // Dynamic step structure definition
-  type StepId = 
-    | 'main_type'
-    | 're_sub_type'
-    | 'customer_status'
-    | 'sector'
-    | 'personal_info'
+  // Simplified 3-step structure: customer data -> salary -> finance options -> results
+  type StepId =
+    | 'customer_data'
     | 'salary'
     | 'finance_options'
     | 'results';
 
-  const realEstateFlow: StepId[] = [
-    'main_type',
-    're_sub_type',
-    'sector',
-    'personal_info',
+  const flow: StepId[] = [
+    'customer_data',
     'salary',
     'finance_options',
     'results'
   ];
 
-  const personalOnlyFlow: StepId[] = [
-    'main_type',
-    'customer_status',
-    'salary',
-    'finance_options',
-    'results'
-  ];
-
-  const existingPersonalFlow: StepId[] = [
-    'main_type',
-    'sector',
-    'personal_info',
-    'salary',
-    'finance_options',
-    'results'
-  ];
-
-  const getActiveFlow = (): StepId[] => {
-    if (mainFinanceType === 'real_estate') return realEstateFlow;
-    if (mainFinanceType === 'personal_only') return personalOnlyFlow;
-    return existingPersonalFlow;
-  };
-
-  const flow = getActiveFlow();
-  const activeStepId = flow[currentStep - 1] || 'main_type';
+  const activeStepId = flow[currentStep - 1] || 'customer_data';
 
   const hijriToGreg = (year: number, calendar: 'gregorian' | 'hijri'): number => {
     if (calendar === 'hijri') {
@@ -170,10 +151,9 @@ export default function StepWizard() {
   // Handle Step validations
   const validateStep = (stepNumber: number): boolean => {
     const stepErrors: string[] = [];
-    const flow = getActiveFlow();
     const stepId = flow[stepNumber - 1];
 
-    if (stepId === 'personal_info') {
+    if (stepId === 'customer_data') {
       const currentYear = 2026;
 
       // Validate birth month & year ranges
@@ -230,11 +210,9 @@ export default function StepWizard() {
     }
 
     if (stepId === 'finance_options') {
-      if (mainFinanceType !== 'personal_only') {
-        if (termMode === 'manual') {
-          if (!manualTermYears || manualTermYears < 1 || manualTermYears > 30) {
-            stepErrors.push('يرجى إدخال مدة تمويل مستهدفة صحيحة بين 1 و 30 سنة.');
-          }
+      if (termMode === 'manual') {
+        if (!manualTermYears || manualTermYears < 1 || manualTermYears > 30) {
+          stepErrors.push('يرجى إدخال مدة تمويل مستهدفة صحيحة بين 1 و 30 سنة.');
         }
       }
     }
@@ -324,19 +302,10 @@ export default function StepWizard() {
     setCurrentStep(1);
   };
 
-  // Generative options range helper
-  const yearsRange = (from: number, to: number) => {
-    const arr = [];
-    for (let i = from; i <= to; i++) {
-      arr.push(i);
-    }
-    return arr;
-  };
-
   return (
     <div className="w-full bg-[#F5F7FA]">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
+
         {/* Step Wizard visual Progress stepper indicators */}
         {currentStep < flow.length && (
           <div className="mb-8 select-none">
@@ -347,13 +316,9 @@ export default function StepWizard() {
                 const isCompleted = s < currentStep;
 
                 let stepLabel = '';
-                if (stepId === 'main_type') stepLabel = 'نوع الحسبة';
-                else if (stepId === 're_sub_type') stepLabel = 'نوع العقاري';
-                else if (stepId === 'sector') stepLabel = 'جهة العمل';
-                else if (stepId === 'customer_status') stepLabel = 'حالة العميل';
-                else if (stepId === 'personal_info') stepLabel = 'البيانات الشخصية';
+                if (stepId === 'customer_data') stepLabel = 'بيانات العميل';
                 else if (stepId === 'salary') stepLabel = 'الراتب والدخل';
-                else if (stepId === 'finance_options') stepLabel = 'خيارات الحسبة';
+                else if (stepId === 'finance_options') stepLabel = 'خيارات التمويل';
 
                 return (
                   <div key={stepId} className="flex flex-col items-center flex-1 relative">
@@ -394,212 +359,64 @@ export default function StepWizard() {
 
         {/* Main Step Cards Form container */}
         <div className="bg-white rounded-3xl border border-[#E5E7EB] p-8 md:p-10 shadow-xs">
-          
-          {/* STEP 1: Main Type Selection */}
-          {activeStepId === 'main_type' && (
-            <div className="space-y-6 animate-fade-in">
-              <div className="text-center max-w-lg mx-auto mb-8">
-                <h3 className="text-xl font-bold text-[#111827]">اختر التمويل المراد احتسابه</h3>
-                <p className="text-sm text-[#6B7280] mt-1">نوفر نماذج حسابات دقيقة للمرونة العقارية أو التمويل الشخصي القصير أو الاستحقاقات المدمجة.</p>
+
+          {/* STEP 1: Customer Data (sector + rank + dates) */}
+          {activeStepId === 'customer_data' && (
+            <div className="space-y-8 animate-fade-in">
+              <div className="text-center max-w-lg mx-auto">
+                <h3 className="text-xl font-bold text-[#111827]">بيانات العميل</h3>
+                <p className="text-sm text-[#6B7280] mt-1">حدد جهة العمل وتواريخك الأساسية لتأسيس السن وأشهر الخدمة بدقة لكافة البنوك.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div
-                  id="re-type-card"
-                  onClick={() => setMainFinanceType('real_estate')}
-                  className={`border rounded-2xl p-6 text-center cursor-pointer transition-all hover:border-[#0057B8] ${
-                    mainFinanceType === 'real_estate' ? 'border-[#0057B8] bg-[#0057B8]/5' : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <div className={`w-12 h-12 bg-[#0057B8]/10 text-[#0057B8] rounded-xl flex items-center justify-center mx-auto mb-4`}>
-                    <Home className="w-6 h-6" />
-                  </div>
-                  <h4 className="font-bold text-[#111827] text-sm">تمويل عقاري</h4>
-                  <p className="text-xs text-gray-500 mt-2 leading-relaxed">لحساب التمويل العقاري، مع إمكانية اختيار عقاري فقط أو عقاري مع شخصي جديد في الخطوة التالية.</p>
+              {/* Employment sector */}
+              <div className="space-y-4">
+                <span className="block text-xs font-bold text-gray-700">جهة العمل / القطاع المهني:</span>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { id: 'government_civilian', label: 'حكومي مدني', icon: Briefcase },
+                    { id: 'military', label: 'عسكري حربي', icon: User },
+                    { id: 'private', label: 'القطاع الخاص', icon: Home },
+                    { id: 'retired', label: 'متقاعد حالي', icon: Coins }
+                  ].map((sec) => (
+                    <div
+                      key={sec.id}
+                      onClick={() => {
+                        setSectorId(sec.id as SectorId);
+                        if (sec.id === 'retired') setSalaryMode('direct');
+                      }}
+                      className={`border rounded-2xl p-5 text-center cursor-pointer transition-all ${
+                        sectorId === sec.id
+                          ? 'border-[#0057B8] bg-[#0057B8]/5'
+                          : 'border-gray-200 bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      <sec.icon className={`w-6 h-6 mx-auto mb-2 ${sectorId === sec.id ? 'text-[#0057B8]' : 'text-gray-500'}`} />
+                      <span className="text-xs font-bold text-[#111827] block">{sec.label}</span>
+                    </div>
+                  ))}
                 </div>
 
-                <div
-                  id="pf-type-card"
-                  onClick={() => setMainFinanceType('personal_only')}
-                  className={`border rounded-2xl p-6 text-center cursor-pointer transition-all hover:border-[#0057B8] ${
-                    mainFinanceType === 'personal_only' ? 'border-[#0057B8] bg-[#0057B8]/5' : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <div className={`w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center mx-auto mb-4`}>
-                    <Coins className="w-6 h-6" />
+                {/* Rank selector shown for military only */}
+                {sectorId === 'military' && (
+                  <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 animate-fade-in">
+                    <label className="block text-xs font-bold text-gray-700 mb-2">الرتبة العسكرية للعميل:</label>
+                    <select
+                      id="rank-select"
+                      value={rankId}
+                      onChange={(e) => setRankId(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8] focus:border-transparent"
+                    >
+                      {militaryRanks.filter(r => r.isActive).map((rank) => (
+                        <option key={rank.id} value={rank.id}>
+                          {rank.nameAr} (سن تقاعد الرتبة: {rank.retirementAge} سنة)
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <h4 className="font-bold text-[#111827] text-sm">تمويل شخصي فقط</h4>
-                  <p className="text-xs text-gray-500 mt-2 leading-relaxed">لحساب التمويل الشخصي المستقل لمدة قصيرة.</p>
-                </div>
-
-                <div
-                  id="both-type-card"
-                  onClick={() => setMainFinanceType('real_estate_with_existing_personal')}
-                  className={`border rounded-2xl p-6 text-center cursor-pointer transition-all hover:border-[#0057B8] ${
-                    mainFinanceType === 'real_estate_with_existing_personal' ? 'border-[#0057B8] bg-[#0057B8]/5' : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <div className={`w-12 h-12 bg-teal-50 text-[#0EA5A4] rounded-xl flex items-center justify-center mx-auto mb-4`}>
-                    <Scale className="w-6 h-6" />
-                  </div>
-                  <h4 className="font-bold text-[#111827] text-sm">عقاري مع شخصي قائم</h4>
-                  <p className="text-xs text-gray-500 mt-2 leading-relaxed">لحساب التمويل العقاري مع وجود قسط شخصي قائم يتم خصمه من الاستقطاع.</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP: Customer Status Selection for Personal Only */}
-          {activeStepId === 'customer_status' && (
-            <div className="space-y-6 animate-fade-in">
-              <div className="text-center max-w-lg mx-auto mb-8">
-                <h3 className="text-xl font-bold text-[#111827]">ما هي حالة العميل الوظيفية؟</h3>
-                <p className="text-sm text-[#6B7280] mt-1">يرجى اختيار حالة العميل الوظيفية للبدء في توجيه الاحتساب الرياضي.</p>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-                <div
-                  id="cs-active-card"
-                  onClick={() => {
-                    setCustomerStatus('active_employee');
-                    if (sectorId === 'retired') {
-                      setSectorId('government_civilian');
-                    }
-                  }}
-                  className={`border rounded-2xl p-6 text-center cursor-pointer transition-all hover:border-[#0057B8] ${
-                    customerStatus === 'active_employee' ? 'border-[#0057B8] bg-[#0057B8]/5' : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <div className={`w-12 h-12 bg-blue-50 text-[#0057B8] rounded-xl flex items-center justify-center mx-auto mb-4`}>
-                    <User className="w-6 h-6" />
-                  </div>
-                  <h4 className="font-bold text-[#111827] text-sm">موظف نشط</h4>
-                  <p className="text-xs text-gray-500 mt-2 leading-relaxed">حكومي، عسكري، أو قطاع خاص.</p>
-                </div>
-
-                <div
-                  id="cs-retired-card"
-                  onClick={() => {
-                    setCustomerStatus('retired');
-                    setSectorId('retired');
-                    setSalaryMode('direct');
-                  }}
-                  className={`border rounded-2xl p-6 text-center cursor-pointer transition-all hover:border-[#0057B8] ${
-                    customerStatus === 'retired' ? 'border-[#0057B8] bg-[#0057B8]/5' : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <div className={`w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center mx-auto mb-4`}>
-                    <Coins className="w-6 h-6" />
-                  </div>
-                  <h4 className="font-bold text-[#111827] text-sm">متقاعد</h4>
-                  <p className="text-xs text-gray-500 mt-2 leading-relaxed">يعتمد الحساب على الراتب التقاعدي الشهري فقط.</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 1.5: Real Estate Subtype Selection */}
-          {activeStepId === 're_sub_type' && (
-            <div className="space-y-6 animate-fade-in">
-              <div className="text-center max-w-lg mx-auto mb-8">
-                <h3 className="text-xl font-bold text-[#111827]">نوع التمويل العقاري</h3>
-                <p className="text-sm text-[#6B7280] mt-1">يرجى تحديد نمط التثبيت العقاري (فردي خالص أو متداخل مع برنامج تمويل شخصي استهلاكي إضافي).</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-                <div
-                  id="re-sub-only-card"
-                  onClick={() => setRealEstateSubType('real_estate_only')}
-                  className={`border rounded-2xl p-6 text-center cursor-pointer transition-all hover:border-[#0057B8] ${
-                    realEstateSubType === 'real_estate_only' ? 'border-[#0057B8] bg-[#0057B8]/5' : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <div className={`w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-4`}>
-                    <Home className="w-6 h-6" />
-                  </div>
-                  <h4 className="font-bold text-[#111827] text-sm">عقاري فقط</h4>
-                  <p className="text-xs text-gray-500 mt-2 leading-relaxed">حساب التمويل العقاري بدون تمويل شخصي جديد.</p>
-                </div>
-
-                <div
-                  id="re-sub-plus-personal-card"
-                  onClick={() => setRealEstateSubType('real_estate_with_new_personal')}
-                  className={`border rounded-2xl p-6 text-center cursor-pointer transition-all hover:border-[#0057B8] ${
-                    realEstateSubType === 'real_estate_with_new_personal' ? 'border-[#0057B8] bg-[#0057B8]/5' : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <div className={`w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4`}>
-                    <Scale className="w-6 h-6" />
-                  </div>
-                  <h4 className="font-bold text-[#111827] text-sm">عقاري + شخصي جديد</h4>
-                  <p className="text-xs text-gray-500 mt-2 leading-relaxed">حساب التمويل العقاري مع تمويل شخصي جديد ضمن الحسبة.</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: Employment Sector & Ranks */}
-          {activeStepId === 'sector' && (
-            <div className="space-y-6 animate-fade-in">
-              <div className="text-center max-w-lg mx-auto mb-8">
-                <h3 className="text-xl font-bold text-[#111827]">ما هو القطاع المهني لجهة العمل؟</h3>
-                <p className="text-sm text-[#6B7280] mt-1">يحدد نوع القطاع النظير نسب الخصومات التقاعدية وسن التقاعد المهني الإلزامي ونسب الاستقطاع.</p>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { id: 'government_civilian', label: 'حكومي مدني', icon: Briefcase },
-                  { id: 'military', label: 'عسكري حربي', icon: User },
-                  { id: 'private', label: 'القطاع الخاص', icon: Home },
-                  { id: 'retired', label: 'متقاعد حالي', icon: Coins }
-                ].map((sec) => (
-                  <div
-                    key={sec.id}
-                    onClick={() => {
-                      setSectorId(sec.id as SectorId);
-                      setSalaryMode('direct'); // Default retired always to direct pension salary net
-                    }}
-                    className={`border rounded-2xl p-5 text-center cursor-pointer transition-all ${
-                      sectorId === sec.id
-                        ? 'border-[#0057B8] bg-[#0057B8]/5'
-                        : 'border-gray-200 bg-white hover:bg-gray-50'
-                    }`}
-                  >
-                    <sec.icon className={`w-6 h-6 mx-auto mb-2 ${sectorId === sec.id ? 'text-[#0057B8]' : 'text-gray-500'}`} />
-                    <span className="text-xs font-bold text-[#111827] block">{sec.label}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Rank selector shown for military only */}
-              {sectorId === 'military' && (
-                <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 mt-6 animate-fade-in">
-                  <label className="block text-xs font-bold text-gray-700 mb-2">الرتبة العسكرية للعميل:</label>
-                  <select
-                    id="rank-select"
-                    value={rankId}
-                    onChange={(e) => setRankId(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8] focus:border-transparent"
-                  >
-                    {militaryRanks.filter(r => r.isActive).map((rank) => (
-                      <option key={rank.id} value={rank.id}>
-                        {rank.nameAr} (سن تقاعد الرتبة: {rank.retirementAge} سنة)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* STEP 3: Dates and Age Details */}
-          {activeStepId === 'personal_info' && (
-            <div className="space-y-6 animate-fade-in">
-              <div className="text-center max-w-lg mx-auto mb-8">
-                <h3 className="text-xl font-bold text-[#111827]">تاريخ الميلاد وتاريخ مباشرة العمل</h3>
-                <p className="text-sm text-[#6B7280] mt-1">تستخدم تواريخك دقيقة لحساب السن بالشهور وأشهر الخدمة النشطة لتأسيس السقف الائتماني العقاري.</p>
-              </div>
-
+              {/* Dates */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Dob Card */}
                 <div className="border border-gray-200 rounded-2xl p-6 bg-white space-y-4">
@@ -714,7 +531,7 @@ export default function StepWizard() {
                 ) : (
                   <div className="bg-amber-50 rounded-2xl p-6 border border-amber-200 flex flex-col justify-center animate-fade-in">
                     <p className="text-xs text-amber-800 leading-relaxed font-sans">
-                      بما أن القطاع المهني المختار هو <strong>"متقاعد حالي"</strong>، فلن نطلب تاريخ مباشرة العمل ويتم الاعتماد القياسي المطلق على السن لدورة الحياة التمويلية.
+                      بما أن جهة العمل المختارة هي <strong>"متقاعد حالي"</strong>، فلن نطلب تاريخ مباشرة العمل ولا الرتبة، ويتم الاعتماد على السن والراتب التقاعدي الصافي.
                     </p>
                   </div>
                 )}
@@ -722,74 +539,13 @@ export default function StepWizard() {
             </div>
           )}
 
-          {/* STEP 4: Salary & Income */}
+          {/* STEP 2: Salary & Income */}
           {activeStepId === 'salary' && (
             <div className="space-y-6 animate-fade-in">
               <div className="text-center max-w-lg mx-auto mb-8">
-                <h3 className="text-xl font-bold text-[#111827]">الرواتب والمستحقات والبدلات</h3>
+                <h3 className="text-xl font-bold text-[#111827]">الراتب والدخل</h3>
                 <p className="text-sm text-[#6B7280] mt-1">يُشترط الإدخال الصحيح للراتب لتقرير عوامل الاستقطاع ونسب الملاءمة ائتمانياً لدى كافة البنوك.</p>
               </div>
-
-              {/* Small Sector Picker for Active Employee in Personal Only Flow */}
-              {mainFinanceType === 'personal_only' && customerStatus === 'active_employee' && (
-                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200">
-                  <span className="block text-xs font-bold text-gray-700 mb-3 text-right">القطاع المهني لجهة العمل التابع لها:</span>
-                  <div className="grid grid-cols-3 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setSectorId('government_civilian')}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
-                        sectorId === 'government_civilian'
-                          ? 'bg-[#0057B8] text-white border-[#0057B8] shadow-xs'
-                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      حكومي مدني
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSectorId('military')}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
-                        sectorId === 'military'
-                          ? 'bg-[#0057B8] text-white border-[#0057B8] shadow-xs'
-                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      عسكري
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSectorId('private')}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
-                        sectorId === 'private'
-                          ? 'bg-[#0057B8] text-white border-[#0057B8] shadow-xs'
-                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      قطاع خاص
-                    </button>
-                  </div>
-
-                  {/* Optional Rank Select for Military in Personal Only flow */}
-                  {sectorId === 'military' && (
-                    <div className="mt-4 animate-fade-in text-right">
-                      <label className="block text-[11px] font-bold text-gray-600 mb-2">الرتبة العسكرية:</label>
-                      <select
-                        id="rank-select-salary"
-                        value={rankId}
-                        onChange={(e) => setRankId(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8] focus:border-transparent"
-                      >
-                        {militaryRanks.filter(r => r.isActive).map((rank) => (
-                          <option key={rank.id} value={rank.id}>
-                            {rank.nameAr} (سن تقاعد الرتبة: {rank.retirementAge} سنة)
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Sub tabs: manual net vs detailed */}
               {sectorId !== 'retired' && (
@@ -803,7 +559,7 @@ export default function StepWizard() {
                         : 'text-gray-500 hover:text-gray-900'
                     }`}
                   >
-                    أدخل الراتب الصافي مباشرة
+                    صافي مباشر
                   </button>
                   <button
                     id="salary-details-tab"
@@ -814,7 +570,7 @@ export default function StepWizard() {
                         : 'text-gray-500 hover:text-gray-900'
                     }`}
                   >
-                    أدخل تفاصيل الراتب (الأساسي والبدلات)
+                    تفاصيل الراتب (الأساسي والبدلات)
                   </button>
                 </div>
               )}
@@ -840,7 +596,7 @@ export default function StepWizard() {
                     </div>
                   ) : (
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-2">مبلغ الراتب الصافي الكلي (المحول للبنك):</label>
+                      <label className="block text-xs font-bold text-gray-700 mb-2">صافي الراتب الكلي (المحول للبنك):</label>
                       <div className="relative">
                         <NumericInput
                           id="direct-salary-input"
@@ -915,164 +671,218 @@ export default function StepWizard() {
             </div>
           )}
 
-          {/* STEP 5: Finance Options & Obligations */}
+          {/* STEP 3: Finance Options */}
           {activeStepId === 'finance_options' && (
             <div className="space-y-6 animate-fade-in">
               <div className="text-center max-w-lg mx-auto mb-8">
-                <h3 className="text-xl font-bold text-[#111827]">تخصيص مدة التمويل والالتزامات</h3>
-                <p className="text-sm text-[#6B7280] mt-1">تتحكم مدة السداد وتفصيل الدعم والالتزامات بجدول الفائدة التراكمية وهوامش أرباح البنوك.</p>
+                <h3 className="text-xl font-bold text-[#111827]">خيارات التمويل</h3>
+                <p className="text-sm text-[#6B7280] mt-1">اختر نوع المنتج والدعم والبنك والمدة. أي تغيير هنا يحدّث النتائج مباشرة دون الرجوع للخطوات السابقة.</p>
+              </div>
+
+              {/* Product type */}
+              <div className="space-y-3">
+                <span className="block text-xs font-bold text-gray-700">نوع المنتج:</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div
+                    id="product-re-only"
+                    onClick={() => setRealEstateSubType('real_estate_only')}
+                    className={`border rounded-2xl p-5 cursor-pointer transition-all flex items-center gap-4 ${
+                      realEstateSubType === 'real_estate_only' ? 'border-[#0057B8] bg-[#0057B8]/5' : 'border-gray-200 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="w-11 h-11 shrink-0 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                      <Home className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-[#111827] text-sm">عقاري فقط</h4>
+                      <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">حساب التمويل العقاري بدون تمويل شخصي جديد.</p>
+                    </div>
+                  </div>
+
+                  <div
+                    id="product-re-plus-personal"
+                    onClick={() => setRealEstateSubType('real_estate_with_new_personal')}
+                    className={`border rounded-2xl p-5 cursor-pointer transition-all flex items-center gap-4 ${
+                      realEstateSubType === 'real_estate_with_new_personal' ? 'border-[#0057B8] bg-[#0057B8]/5' : 'border-gray-200 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="w-11 h-11 shrink-0 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                      <Scale className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-[#111827] text-sm">عقاري + شخصي جديد</h4>
+                      <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">حساب التمويل العقاري مع تمويل شخصي جديد ضمن الحسبة.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Existing personal loan question */}
+              <div className="border border-gray-200 bg-white rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-700">هل لديك تمويل شخصي قائم؟</span>
+                  <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setHasExistingPersonal(false)}
+                      className={`px-5 py-1.5 rounded-md text-[11px] font-bold transition-all ${!hasExistingPersonal ? 'bg-white text-[#0057B8] shadow-xs' : 'text-gray-500 hover:text-gray-900'}`}
+                    >
+                      لا
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHasExistingPersonal(true)}
+                      className={`px-5 py-1.5 rounded-md text-[11px] font-bold transition-all ${hasExistingPersonal ? 'bg-white text-[#0057B8] shadow-xs' : 'text-gray-500 hover:text-gray-900'}`}
+                    >
+                      نعم
+                    </button>
+                  </div>
+                </div>
+
+                {hasExistingPersonal && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in pt-1">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-2">القسط الشهري الحالي:</label>
+                      <div className="relative">
+                        <NumericInput
+                          id="existing-personal-payment-input"
+                          min={0}
+                          allowDecimals={true}
+                          value={existingPersonalLoanPayment}
+                          onChange={setExistingPersonalLoanPayment}
+                          placeholder="مثال: 1200"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8]"
+                        />
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">ريال</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-2">المدة المتبقية (بالشهور):</label>
+                      <div className="relative">
+                        <NumericInput
+                          id="existing-personal-remaining-input"
+                          min={0}
+                          allowDecimals={false}
+                          value={existingPersonalRemainingMonths}
+                          onChange={setExistingPersonalRemainingMonths}
+                          placeholder="مثال: 24"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8]"
+                        />
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">شهر</span>
+                      </div>
+                    </div>
+                    <p className="md:col-span-2 text-[11px] text-[#0057B8] bg-[#0057B8]/5 rounded-xl px-3 py-2 leading-relaxed">
+                      سيتم احتساب المسار تلقائياً كـ <strong>"عقاري مع شخصي قائم"</strong> ويخصم القسط الحالي من الاستقطاع.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Sakani Program (Mortgage support) - HELD FOR MORTGAGES ONLY */}
-                {mainFinanceType !== 'personal_only' && (
-                  <div className="border border-gray-200 bg-white rounded-2xl p-5">
-                    <label className="block text-xs font-bold text-gray-700 mb-3 flex items-center justify-between">
-                      <span>برنامج الدعم السكني (سكني):</span>
-                      <HelpCircle className="w-4 h-4 text-gray-400 cursor-pointer" />
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: 'none', label: 'غير مدعوم' },
-                        { id: 'monthly', label: 'دعم شهري' },
-                        { id: 'downpayment', label: 'دعم دفعة' }
-                      ].map((st) => (
-                        <button
-                          key={st.id}
-                          type="button"
-                          onClick={() => setSupportType(st.id as SupportType)}
-                          className={`py-2 px-1 text-xs font-bold rounded-lg border text-center transition-all cursor-pointer ${
-                            supportType === st.id
-                              ? 'border-[#0057B8] bg-[#0057B8]/5 text-[#0057B8]'
-                              : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300'
-                          }`}
-                        >
-                          {st.label}
-                        </button>
-                      ))}
-                    </div>
+
+                {/* Sakani Program (Mortgage support) */}
+                <div className="border border-gray-200 bg-white rounded-2xl p-5">
+                  <label className="block text-xs font-bold text-gray-700 mb-3 flex items-center justify-between">
+                    <span>برنامج الدعم السكني (سكني):</span>
+                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-pointer" />
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'none', label: 'غير مدعوم' },
+                      { id: 'monthly', label: 'دعم شهري' },
+                      { id: 'downpayment', label: 'دعم دفعة' }
+                    ].map((st) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => setSupportType(st.id as SupportType)}
+                        className={`py-2 px-1 text-xs font-bold rounded-lg border text-center transition-all cursor-pointer ${
+                          supportType === st.id
+                            ? 'border-[#0057B8] bg-[#0057B8]/5 text-[#0057B8]'
+                            : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300'
+                        }`}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
                   </div>
-                )}
+                </div>
 
-                {/* Term Option Mode - HELD FOR MORTGAGES ONLY */}
-                {mainFinanceType !== 'personal_only' && (
-                  <div className="border border-[#E5E7EB] bg-white rounded-2xl p-5">
-                    <label className="block text-xs font-bold text-gray-700 mb-3">المدة المستهدفة للتمويل العقاري:</label>
-                    <div className="grid grid-cols-3 gap-2 mb-2">
-                      {[
-                        { id: 'max', label: 'المدة الأقصى' },
-                        { id: 'until_retirement', label: 'حتى التقاعد' },
-                        { id: 'manual', label: 'اختيار يدوي' }
-                      ].map((tm) => (
-                        <button
-                          key={tm.id}
-                          type="button"
-                          onClick={() => setTermMode(tm.id as TermMode)}
-                          className={`py-2 px-1 text-xs font-bold rounded-lg border text-center transition-all cursor-pointer ${
-                            termMode === tm.id
-                              ? 'border-[#0057B8] bg-[#0057B8]/5 text-[#0057B8]'
-                              : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300'
-                          }`}
-                        >
-                          {tm.label}
-                        </button>
-                      ))}
-                    </div>
+                {/* Term Option Mode */}
+                <div className="border border-[#E5E7EB] bg-white rounded-2xl p-5">
+                  <label className="block text-xs font-bold text-gray-700 mb-3">المدة المستهدفة للتمويل العقاري:</label>
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {[
+                      { id: 'max', label: 'المدة الأقصى' },
+                      { id: 'until_retirement', label: 'حتى التقاعد' },
+                      { id: 'manual', label: 'اختيار يدوي' }
+                    ].map((tm) => (
+                      <button
+                        key={tm.id}
+                        type="button"
+                        onClick={() => setTermMode(tm.id as TermMode)}
+                        className={`py-2 px-1 text-xs font-bold rounded-lg border text-center transition-all cursor-pointer ${
+                          termMode === tm.id
+                            ? 'border-[#0057B8] bg-[#0057B8]/5 text-[#0057B8]'
+                            : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300'
+                        }`}
+                      >
+                        {tm.label}
+                      </button>
+                    ))}
+                  </div>
 
-                    {termMode === 'manual' && (
-                      <div className="mt-3 space-y-2 animate-fade-in">
-                        <label className="block text-[10px] font-bold text-gray-400">عدد سنوات التمويل المستهدفة (بحد أقصى 30 سنة):</label>
-                        <div className="relative">
-                          <NumericInput
-                            id="manual-term-years-input"
-                            min={1}
-                            max={30}
-                            allowDecimals={false}
-                            placeholder="مثال: 30"
-                            value={manualTermYears}
-                            onChange={setManualTermYears}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8]"
-                          />
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">سنة</span>
-                        </div>
+                  {termMode === 'manual' && (
+                    <div className="mt-3 space-y-2 animate-fade-in">
+                      <label className="block text-[10px] font-bold text-gray-400">عدد سنوات التمويل المستهدفة (بحد أقصى 30 سنة):</label>
+                      <div className="relative">
+                        <NumericInput
+                          id="manual-term-years-input"
+                          min={1}
+                          max={30}
+                          allowDecimals={false}
+                          placeholder="مثال: 30"
+                          value={manualTermYears}
+                          onChange={setManualTermYears}
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8]"
+                        />
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">سنة</span>
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Selected Bank Filter */}
                 <div className="border border-gray-200 bg-white rounded-2xl p-5">
-                  <label className="block text-xs font-bold text-gray-700 mb-2">جهة التمويل المفضلة:</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-2">البنك:</label>
                   <select
                     id="bank-filter-select"
                     value={selectedBankId}
                     onChange={(e) => setSelectedBankId(e.target.value)}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8]"
                   >
-                    <option value="all">كل البنوك النشطة المتاحة (مقارنة العروض)</option>
+                    <option value="all">جميع البنوك النشطة (مقارنة العروض)</option>
                     {banks.filter(b => b.isActive).map(bank => (
                       <option key={bank.id} value={bank.id}>{bank.nameAr}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Obligations obligations */}
+                {/* Other monthly obligations */}
                 <div className="border border-gray-200 bg-white rounded-2xl p-5">
-                  {mainFinanceType === 'real_estate_with_existing_personal' ? (
-                    <div className="space-y-4 animate-fade-in">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-2">قسط التمويل الشخصي القائم:</label>
-                        <div className="relative">
-                          <NumericInput
-                            id="existing-personal-payment-input"
-                            min={0}
-                            allowDecimals={true}
-                            value={existingPersonalLoanPayment}
-                            onChange={setExistingPersonalLoanPayment}
-                            placeholder="مثال: 1200"
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8]"
-                          />
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">ريال سعودي</span>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-2">التزامات شهرية أخرى (إن وجدت):</label>
-                        <div className="relative">
-                          <NumericInput
-                            id="other-obligations-input"
-                            min={0}
-                            allowDecimals={true}
-                            value={otherObligations}
-                            onChange={setOtherObligations}
-                            placeholder="مثال: 500"
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8]"
-                          />
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">ريال سعودي</span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="animate-fade-in">
-                      <label className="block text-xs font-bold text-gray-700 mb-2">
-                        {mainFinanceType === 'personal_only' 
-                          ? 'قسط الالتزامات الشهرية الأخرى (إن وجدت):' 
-                          : 'إجمالي الالتزامات الشهرية القائمة حالياً:'}
-                      </label>
-                      <div className="relative">
-                        <NumericInput
-                          id="obligations-input"
-                          min={0}
-                          allowDecimals={true}
-                          value={otherObligations}
-                          onChange={setOtherObligations}
-                          placeholder="مثال: 1500"
-                          className="w-full bg-gray-50 border border-[#E5E7EB] rounded-2xl px-4 py-3.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8]"
-                        />
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">ريال شهرياً</span>
-                      </div>
-                    </div>
-                  )}
+                  <label className="block text-xs font-bold text-gray-700 mb-2">التزامات شهرية أخرى (إن وجدت):</label>
+                  <div className="relative">
+                    <NumericInput
+                      id="other-obligations-input"
+                      min={0}
+                      allowDecimals={true}
+                      value={otherObligations}
+                      onChange={setOtherObligations}
+                      placeholder="مثال: 500"
+                      className="w-full bg-gray-50 border border-[#E5E7EB] rounded-xl px-4 py-3.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057B8]"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">ريال شهرياً</span>
+                  </div>
                 </div>
 
               </div>
